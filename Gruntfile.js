@@ -54,8 +54,20 @@ module.exports = function(grunt) {
       gruntfile: {
         src: 'Gruntfile.js'
       },
-      lib_test: {
-        src: ['*.js', 'js/*.js', '*.json', 'data/*.json', 'test/**/*.js']
+      plugin: {
+        src: 'package.json'
+      },
+      test: {
+        src: [ 'test/**/*.js']
+      },
+      code: {
+        src: [ '*.js', 'js/*.js', "!Gruntfile.js"]
+      },
+      data: {
+        src: ['data/*.json', 'plugin/*.json', 'plugin/data/*.json']
+      },
+      all: {
+        src: [ '<%= jshint.code.src %>', '<%= jshint.data.src %>', '<%= jshint.test.src %>']
       }
     },
     qunit: {
@@ -66,13 +78,26 @@ module.exports = function(grunt) {
         files: '<%= jshint.gruntfile.src %>',
         tasks: ['jshint:gruntfile']
       },
-      lib_test: {
-        files: '<%= jshint.lib_test.src %>',
-        tasks: ['jshint:lib_test', 'qunit']
+      plugin: {
+        files: '<%= jshint.plugin.src %>',
+        tasks: ['jshint:plugin', 'plugin']
+      },
+      code: {
+        files: '<%= jshint.code.src %>',
+        tasks: ['jshint:code', 'copy:code']
+      },
+      all: {
+        files: '<%= jshint.all.src %>',
+        tasks: ['jshint:all']
       }
     },    
+
+    bootstrap_src: "./node_modules/bootstrap/dist",
+    plates_src: "https://raw.githubusercontent.com/flatiron/plates/v0.4.11/lib",
+    target: "./plugin",
+    lib_path: "<%= target %>/js/lib",
     plugin_config: {
-        path: "./",
+        path: "<%= target %>/",
         exclusions: ['pkg', 'script'],
         libFiles:  ["jquery.min.js"],
         imageKeys: [],
@@ -87,38 +112,58 @@ module.exports = function(grunt) {
         }
     },
     jsbeautifier : {
-      files : ["data/config-*.json", "manifest.json"],
+      files : ["<%= target %>/*.json" ,"<%= target %>/data/config-*.json"],
         options : {}
     },
     copy: {
-      dev: {
+      lib: {
         files: [{
-            cwd: 'node_modules/bootstrap/dist/css',
+            cwd: "<%= bootstrap_src %>/css",
             src: 'bootstrap.min.css',
-            dest: 'css/',
+            dest: "<%= target %>/css/",
             expand: true
         }, 
         {
-            cwd: 'node_modules/bootstrap/dist/js',
+            cwd: "<%= bootstrap_src %>/js",
             src: 'bootstrap.min.js',
-            dest: 'js/lib/',
+            dest: "<%= lib_path %>/",
             expand: true
         },
         {
-            cwd: 'js/lib',
+            cwd: "<%= lib_path %>",
             src: 'jquery-*.js',
-            dest: 'js/lib/',
+            dest: "<%= lib_path %>/",
             expand: true,
             dot: true,
             rename: function(dest, src) {
               return dest + 'jquery.min.js';
             }
         }]
+      },
+      code: {
+        files: [{
+            cwd: './data',
+            src: '*.html',
+            dest: '<%= target %>/data/',
+            expand: true
+        },
+        {
+            cwd: './',
+            src: 'background*.js',
+            dest: '<%= target %>/',
+            expand: true
+        },
+        {
+            cwd: './js',
+            src: '*.js',
+            dest: '<%= target %>/js/',
+            expand: true
+        }]
       }
     },
     jquery: {
       dev: {
-        output: "js/lib",
+        output: '<%= lib_path %>',
         options: {
           prefix: "jquery-",
           minify: true
@@ -126,12 +171,17 @@ module.exports = function(grunt) {
         versions: [ "1.11.1" ]
       }
     },
+
+    jq_version: function() {
+      var jq = grunt.config('jquery').dev;
+      return jq.options.prefix.concat(jq.versions[0])+'.js';
+    },
     http: {
       plates: {
         options: {
-          url: 'https://raw.githubusercontent.com/flatiron/plates/v0.4.11/lib/plates.js',
+          url: '<%= plates_src %>/plates.js',
         },
-        dest: 'js/lib/plates.js'
+        dest: '<%= lib_path %>/plates.js'
       }
     }    
   });
@@ -139,35 +189,40 @@ module.exports = function(grunt) {
 /* ## devDependencies in package.json
   "grunt-contrib-concat": "~0.4.0",
   "grunt-contrib-uglify": "~0.5.0",
-  "grunt-contrib-watch": "~0.6.1",
   "grunt-contrib-qunit": "~0.5.2",
 
 */
   // grunt.loadNpmTasks('grunt-contrib-concat');
   // grunt.loadNpmTasks('grunt-contrib-uglify');
   // grunt.loadNpmTasks('grunt-contrib-qunit');
-  // grunt.loadNpmTasks('grunt-contrib-watch');
+  grunt.loadNpmTasks('grunt-contrib-watch');
   grunt.loadNpmTasks('grunt-contrib-jshint');
   grunt.loadNpmTasks('grunt-contrib-copy');
   grunt.loadNpmTasks("grunt-jsbeautifier");  
   grunt.loadNpmTasks("grunt-jquery-builder");
   grunt.loadNpmTasks('grunt-http');
 
-  grunt.registerTask('default', ['libraries', 'plugin', 'jshint']);
+  grunt.registerTask('build', ['clean', 'libraries', 'plugin', 'copy:code', 'jshint:all']);
   
-  grunt.registerTask('libraries', ['jquery', 'copy', 'http', 'decruft']);
+  grunt.registerTask('libraries', ['jquery', 'http', 'copy:lib', 'decruft']);
 
   grunt.registerTask('plugin', ['plugin_config', 'jsbeautifier', 'readme']);
+  
+  grunt.registerTask('clean', function() {
+      // TODO: replace with proper implementation
+      // no-op
+  });
 
   grunt.registerTask('decruft', function() {
       var fs = require('fs'),
-      file = "js/lib/jquery-1.11.1.js" ; 
+      file = grunt.config('lib_path').concat('/', grunt.config('jq_version')());
       fs.unlinkSync(file);
   });
 
   grunt.registerTask('readme', function() {
-      var file = 'README.md';
-      grunt.file.write('./'.concat(file), grunt.config('readme'));
+      var file = 'README.md',
+      path = grunt.config('lib_path');
+      grunt.file.write(path.concat(file), grunt.config('readme'));
   });
 
   grunt.registerTask('plugin_config', 'Plugin configuration for Chrome and Webkit ', function() {
@@ -220,11 +275,20 @@ module.exports = function(grunt) {
       var save = function(file, content) {
           grunt.file.write(cfg.path.concat(file), JSON.stringify(content) );
       };
+      var packageJs = function(moz, name) {
+        var result = {};
+        moz.exclude.push(name);
+        Object.keys(pkg).forEach(function(key) {
+          var item = pkg[key];
+          if (moz.exclude.indexOf(key) === -1) {
+            result[key] = item;
+          }
+        });
+        return result;
+      };
 
       var moz = merge(options.mozilla, cfg.mozilla);
-      // var packageJs = extract(options.mozilla);
-      // packageJs.title = packageJs.name;
-      // save(moz.package.file, packageJs);
+      save(moz.package.file, packageJs(moz, this.name));
       save(moz.config.file, {
           include: shared.target[0],
           contentStyleFile: prefix(shared.style, './../css/'),
