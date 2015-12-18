@@ -47,6 +47,7 @@ module.exports = function(grunt) {
         boss: true,
         eqnull: true,
         browser: true,
+        evil: true, // !!
         globals: {
           jQuery: true
         }
@@ -82,13 +83,17 @@ module.exports = function(grunt) {
         files: '<%= jshint.plugin.src %>',
         tasks: ['jshint:plugin', 'plugin']
       },
+      template: {
+        files: 'data/template.html',
+        tasks: ['copy:code']
+      },
       code: {
         files: '<%= jshint.code.src %>',
         tasks: ['jshint:code', 'copy:code']
       },
-      all: {
-        files: '<%= jshint.all.src %>',
-        tasks: ['jshint:all']
+      test: {
+        files: '<%= jshint.test.src %>',
+        tasks: ['jshint:test']
       }
     },    
 
@@ -303,6 +308,7 @@ module.exports = function(grunt) {
           matches: shared.target,
           css: prefix(shared.style, './css/'),
           js: prefix(shared.script.concat(webkit.script), './js/'),
+          run_at: 'document_end',
       }];
       save(webkit.package.file, manifestJs);
       save(webkit.config.file, prefixOptions('./img/', './data/'));
