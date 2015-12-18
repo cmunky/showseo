@@ -1,20 +1,23 @@
+
 var showSeoResult = (function ($, $app) {
     var _private,
-        // _template,
         _handlers = {
 
-        onSomeEvent:  function (data) {
-            console.log('someEvent happened!~');
+        onAddPage:  function (data) {
+            console.log('add page happened!~', data);
+            sendMessage('processQueue');
+
+        },
+        onIntervalEvent:  function (data) {
+            console.log('interval event happened!~', data);
+            sendMessage('processQueue');
         },
         onSeoMetadata:  function (data) {
             console.log('seoMetadata happened!~', data);
-            displayGrid.add(data);
-            displayGrid.render();
+            if (Object.keys(data).length > 0) {
+                displayGrid.add(data);
+            }
         },
-        onFirstEvent:  function (data) {
-            console.log('firstEvent happened!~');
-        },
-
     },
     // nested object
     displayGrid = (function ($) {
@@ -24,7 +27,7 @@ var showSeoResult = (function ($, $app) {
             _item,
             _rowCount = -1,
             _width = 3, 
-            _list = [],
+            _hash = {},
 
         applyTemplate = function(data) { 
             return Plates.bind(_item, data, _map);
@@ -43,6 +46,7 @@ var showSeoResult = (function ($, $app) {
 
         initTemplateMap = function() {
             _map.where('src').has('#pageUrl').insert('pageUrl');
+            _map.where('src').has('#thumbnail').insert('thumbnail');
             _map.where('href').is('#').insert('pageUrl');
             _map.where('class').is('page-url').use('pageUrl');
             _map.where('id').is('headTitle').use('headTitle');
@@ -54,19 +58,46 @@ var showSeoResult = (function ($, $app) {
         },
 
         add = function(data) {
-            _list.push(applyTemplate(data));
+            if (!_hash.hasOwnProperty(data.key)) {
+                var node = applyTemplate(data);
+                _hash[data.key] = node;
+                if (elementCount() === _width) {
+                    appendRow();
+                }
+                _last.append(node);
+            }
         },
 
         render = function() {
-            for (var i = 0; i < _list.length; i++) {
-                var node = _list[i];
+            Object.keys(_hash).forEach(function(key) {
+                var node = _hash[key];
                 if (node !== undefined) {
-                    if (elementCount() === _width) { 
-                        appendRow(); 
+                    if (elementCount() === _width) {
+                        appendRow();
                     }
                     _last.append(node);
                 }
+            });
+        },
+
+        getDataRows = function() {
+            var result = $('.container .data.row');
+            if (result.length === 0)  {
+                $('.container .header.row').after(_row);
+                result = $('.container .data.row');
             }
+            return result;
+        },
+
+        clearGrid = function() {
+            $('.container .data.row').remove();
+            initGrid();
+        },
+
+        initGrid = function() {
+            var dataRows = getDataRows();
+            _rowCount = dataRows.length;
+            _last = $(dataRows[_rowCount - 1]);
         },
 
         init = function() {
@@ -74,14 +105,13 @@ var showSeoResult = (function ($, $app) {
             _row = $('#template #row', document).html();
             _item = $('#template #item', document).html();
 
-            // $('.container .data.row').remove()
-            var dataRows = $('.container .data.row');
-            if (dataRows.length === 0)  {
-                $('.container .header.row').after(_row);
-                dataRows = $('.container .data.row');
-            } 
-            _rowCount = dataRows.length;
-            _last = $(dataRows[_rowCount - 1]);
+            $('#b_one').on('click', function(e, x, m) {
+                sendMessage('logBackgroundLists');
+            });
+            $('#b_two').on('click', function(e, x, m) {
+                sendMessage('processQueue');
+            });
+            initGrid();
         };
 
         _map = Plates.Map();
@@ -106,21 +136,9 @@ var showSeoResult = (function ($, $app) {
     },
 
     init = function() {
-        // sendMessage('initialize');
-        var data = {
-            pageUrl: 'page url goes here',
-            linkCanonical: 'canonical url goes here',
-            headTitle: 'title content goes here',
-            bodyH1: 'H1 content goes here',
-            metaDescription: 'data from head',
-            scriptCount: 7,
-        };
-
-        var i = 0;
         displayGrid.init();
-        // while(i < 2) { displayGrid.add(data); i++; }
         displayGrid.render();
-   
+        sendMessage('processQueue');
     };
 
     if ($app.onMessage) { 

@@ -17,25 +17,56 @@ var showSeo = (function ($, $app) {
         },
 
         onInitComplete:  function (data) {
-            var na = 'n/a', payload = {
-                pageUrl: window.location.href, 
-                scriptCount: $("script").length,
-                linkCanonical: $("link[rel='stylesheet']").attr('href') || na, // cause the test site sucks!!!
-                // linkCanonical: $("link[rel='canonical']").attr('href') || na,
-                metaDescription: $("meta[name='description']").attr('content') || na,
-                metaTitle: $("meta[name='title']").attr('content') || na,
-                headTitle: $("head title").text().trim() || na,
-                bodyH1: $($("h1")[0]).text().trim() || na
-            };
-            sendMessage('seoPayload', payload);
+            sendMessage('pageData', extractPageData());
         },
 
         onIntervalEvent:  function (data) {
+            sendMessage('pageData', extractPageData());
             // TODO: Do interval stuff here...
         },
+    },
 
-        onTemplateLoaded:  function (data) {
-        },
+    onWindowLoad = function(e) {
+        sendMessage('pageData', extractPageData());
+    },
+
+    extractPageData = function () {
+        // Should come from config, but the event timing was inconsistent...,
+        // Need to look at the event model and work to make the async work properly
+        config.rules = {
+            'pageUrl': { sel: null, ref: 'window.location.href' },
+            'scriptCount': { sel: "script", len: true },
+            'linkCanonical': { sel: "link[rel='stylesheet']", attr: "href" }, // cause the test site sucks
+            // 'linkCanonical': { sel: "link[rel='canonical']", attr: "href" },
+            'metaDescription': { sel: "meta[name='description']", attr: "content"},
+            'metaTitle': { sel: "meta[name='title']", attr: "content"},
+            'headTitle': { sel: "head title", txt: true},
+            'bodyH1': { sel: "h1", txt: true}
+        };
+        var result = {};
+        if (config.rules) {
+            Object.keys(config.rules).forEach(function(key) {
+                var calc = null,
+                obj = config.rules[key], 
+                select = obj['sel'];
+                if (select) {
+                    var node = $(select);
+                    if (obj.len) {
+                        calc = node.length;
+                    }
+                    if (obj.attr) {
+                        calc = node.attr(obj.attr);
+                    }
+                    if (obj.txt) {
+                        calc = node.text();
+                    }
+                } else {
+                    calc = eval(obj.ref);
+                }
+                result[key] = calc || 'n/a';
+            });
+        }
+        return result;
     },
 
     pageListener = function (msg, _, sendResponse) {
@@ -50,11 +81,11 @@ var showSeo = (function ($, $app) {
     },
 
     init = function() {
-
         sendMessage('initialize');
     };
 
     $app.onMessage.addListener(pageListener);
+    window.onload = onWindowLoad;
 
     return { init: init };
 }($, chrome.runtime));
