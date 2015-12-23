@@ -1,6 +1,8 @@
 var config = {
-    apply: function (data, cb) {
-        console.log('no-op config.apply()', data);
+    apply: function (data, cb) {        
+        console.log('config.apply()', data);
+        this.rules = data.rules;
+        // TODO: additional configuration values ???
         cb();
     }
 };
@@ -31,18 +33,6 @@ var showSeo = (function ($, $app) {
     },
 
     extractPageData = function () {
-        // Should come from config, but the event timing was inconsistent...,
-        // Need to look at the event model and work to make the async work properly
-        config.rules = {
-            'pageUrl': { sel: null, ref: 'window.location.href' },
-            'scriptCount': { sel: "script", len: true },
-            'linkCanonical': { sel: "link[rel='stylesheet']", attr: "href" }, // cause the test site sucks
-            // 'linkCanonical': { sel: "link[rel='canonical']", attr: "href" },
-            'metaDescription': { sel: "meta[name='description']", attr: "content"},
-            'metaTitle': { sel: "meta[name='title']", attr: "content"},
-            'headTitle': { sel: "head title", txt: true},
-            'bodyH1': { sel: "h1", txt: true}
-        };
         var result = {};
         if (config.rules) {
             Object.keys(config.rules).forEach(function(key) {

@@ -80,7 +80,17 @@
                 "jquery.min.js"
             ],
             "options": {
-                "option": "value"
+                "option": "value",
+                "resultUrl": "data/template.html",
+                "rules" : {
+                    "pageUrl": { "sel": null, "ref": "window.location.href" },
+                    "scriptCount": { "sel": "script", "len": true },
+                    "linkCanonical": { "sel": "link[rel='canonical']", "attr": "href" },
+                    "metaDescription": { "sel": "meta[name='description']", "attr": "content"},
+                    "metaTitle": { "sel": "meta[name='title']", "attr": "content"},
+                    "headTitle": { "sel": "head title", "txt": true},
+                    "bodyH1": { "sel": "h1", "txt": true}
+                }
             }
         }
     }
