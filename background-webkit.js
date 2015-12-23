@@ -13,7 +13,6 @@ var service = (function () {
 
     var _config = {
             file: "./data/config-webkit.json",
-            resultUrl: "data/template.html",
             include: chrome.runtime.getManifest().content_scripts[0]["matches"][0]
         },
         _debug = true,
@@ -22,6 +21,7 @@ var service = (function () {
         _tabList = {},
         _pageList = {},
         _snapshotList = {},
+        _starting = false,
         // _worker = null,
         _handlers = {
 
@@ -37,21 +37,35 @@ var service = (function () {
 
         onPageData:  function (data, _, sendResponse) {
             var generateHash = function(data) {
-                var strValue = '';
-                Object.keys(data).forEach(function(key) {
-                    strValue += data[key];
-                });
-                strValue = strValue.replace(/\//g, 'x').toLowerCase();
-                var result = Math.abs(strValue.hashCode()).toString(16);
+                var strValue = '', 
+                excludes = ['scriptCount'],
+                keys = Object.keys(data),
+                result = false;
+                if (keys.length > 0 ) {
+                    keys.forEach(function(key) {
+                        var skip = excludes.indexOf(key) !== -1;
+                        strValue += skip ? '' : data[key];
+                    });
+                    strValue = strValue.replace(/\//g, 'x').toLowerCase();
+                    result = Math.abs(strValue.hashCode()).toString(16);
+                }
                 return result;
             },
             tabId = _.tab.id,
             hash = generateHash(data);
-            _tabList[tabId] = hash;
-            if (!_pageList.hasOwnProperty(hash)) {
-                _pageList[hash] = { 'data': data, 'id': tabId, 'url': _.tab.url };
-                sendResultMessage('addPage'); // does the result page care about this???
+            console.log('onPageData : ', tabId, hash, data);
+            if (hash !== false) {
+                _tabList[tabId] = hash;
+                if (!_pageList.hasOwnProperty(hash)) {
+                    _pageList[hash] = { 'data': data, 'id': tabId, 'url': _.tab.url };
+                    sendResultMessage('addPage'); // does the result page care about this???
+                }
             }
+        },
+
+        onCreateSnapshot:  function (data, _, sendResponse) {
+            console.log('onCreateSnapshot event');
+            createSnapshot(_lastTabId);
         },
 
         onProcessQueue:  function (data, _, sendResponse) {
@@ -69,31 +83,23 @@ var service = (function () {
 
     activeTabListener = function(info) {
         var tabId = info.tabId,
-        tabExists = function() {
-            return _tabList.hasOwnProperty(tabId);
-        },
-        hasSnapshot = function() {
-            return _snapshotList.hasOwnProperty(_tabList[tabId]);
-        },
-        isResult = function() {
-            return _resultTab === tabId;
-        };
+        tabExists = _tabList.hasOwnProperty(tabId),
+        hasSnapshot = _snapshotList.hasOwnProperty(_tabList[tabId]),
+        isResult = _resultTab === tabId;
 
-        if (isResult()) {
-            console.log('_resultTab active');
+        if (isResult) {
             processQueue();
         }
-        if (tabExists()) {
+        if (tabExists) {
             _lastTabId = tabId;
-            if (!hasSnapshot()) {
+            if (!hasSnapshot) {
                 chrome.tabs.reload(tabId, function() {
-                    chrome.tabs.captureVisibleTab(function(screenshotUrl) {
-                        resizeThumbnail(screenshotUrl, function(dataUrl) {
-                            console.log('new snapshot create!');
-                            _snapshotList[_tabList[tabId]] = { 'id' : tabId, 'url': dataUrl };
-                            processQueue();
-                        });
-                    });
+                    createSnapshot(tabId);
+                    var then = new Date();
+                    setTimeout(function(e, x, m) {
+                        var now = new Date();
+                        console.log('then: ', then, 'now: ', now);
+                    }, 10000);
                 });
             }
         }
@@ -114,13 +120,34 @@ var service = (function () {
     },
 
     createResultTab = function () {
-        chrome.tabs.create({ url: _config.resultUrl },
-            function (tab) { _resultTab = tab.id; });
+        console.log('createResultTab : ', _config.resultUrl);
+        if (_config.resultUrl) {
+            chrome.tabs.create({ url: _config.resultUrl, active: false },
+                function (tab) { _resultTab = tab.id; _starting = false; });
+        }
+    },
+
+    createSnapshot = function(tabId) {
+        if (tabId !== _resultTab) {
+            chrome.tabs.captureVisibleTab(function(screenshotUrl) {
+                if (chrome.runtime.lastError) { 
+                    console.log('captureVisibleTab', chrome.runtime.lastError.message); 
+                } else {
+                    resizeThumbnail(screenshotUrl, function(dataUrl) {
+                        console.log('new snapshot created!');
+                        _snapshotList[_tabList[tabId]] = { 'id' : tabId, 'url': dataUrl };
+                        processQueue();
+                    });
+                }
+            });
+        }
     },
 
     ensureResultTab = function(callback) {
         callback = callback || createResultTab;
+        if (_starting) { return; } // ???
         if (_resultTab < 0) {
+            _starting = true;
             callback();
         } else {
             chrome.tabs.get(_resultTab, function(tab) {
@@ -131,12 +158,12 @@ var service = (function () {
 
     initializeTabs = function (tabs) {
         if (tabs.length) {
-            tabs.forEach(function(t, index) {
-                if (t.active) { _lastTabId = t.id; }
-                if ((t.url.indexOf(_config.resultUrl) !== -1) && _resultTab < 0)
-                    { _resultTab = t.id; }
-            });
             loadConfig(function() {
+                tabs.forEach(function(t, index) {
+                    if (t.active) { _lastTabId = t.id; }
+                    if ((t.url.indexOf(_config.resultUrl) !== -1) && _resultTab < 0)
+                        { _resultTab = t.id; }
+                });
                 ensureResultTab();
                 resetAlarm();
                 sendMessage('initComplete');
@@ -184,6 +211,7 @@ var service = (function () {
             cb(c.toDataURL("image/png"));
         };
         img.src = source;
+        console.log('resizeThumbnail', source);
     },
 
     request = function(url, callback, format) {
@@ -210,12 +238,10 @@ var service = (function () {
 
     updateConfig = function(response) {
         var include = _config.include, 
-        url = _config.resultUrl,
         file = _config.file;
         _config = response;
         _config['include'] = include;
         _config['file'] = file;
-        _config['resultUrl'] = url;
     },
 
     /*onWorkerMessage = function (data, _, sendResponse) {

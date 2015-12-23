@@ -5,8 +5,7 @@ var showSeoResult = (function ($, $app) {
 
         onAddPage:  function (data) {
             console.log('add page happened!~', data);
-            sendMessage('processQueue');
-
+            sendMessage('createSnapshot');
         },
         onIntervalEvent:  function (data) {
             console.log('interval event happened!~', data);
